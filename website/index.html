@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Arduino Serial</title>
+  <style>
+    body { font-family: sans-serif; max-width: 600px; margin: 2rem auto; }
+    #log { background: #111; color: #0f0; padding: 1rem; height: 250px;
+           overflow-y: auto; white-space: pre-wrap; font-family: monospace; }
+    input, button { padding: .5rem; margin: .25rem 0; }
+  </style>
+</head>
+<body>
+  <h1>Arduino Serial</h1>
+  <button id="conectar">Conectar</button>
+  <button id="desconectar" disabled>Desconectar</button>
+
+  <div id="log"></div>
+
+  <input id="texto" placeholder="Mensagem para o Arduino" disabled>
+  <button id="enviar" disabled>Enviar</button>
+
+  <script src="app.js"></script>
+</body>
+</html>
