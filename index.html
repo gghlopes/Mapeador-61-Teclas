@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mapeador de teclado</title>
+<style>
+  :root {
+    --paper: #E8EDF1;
+    --panel: #F7F9FB;
+    --ink: #1B2430;
+    --muted: #5C6877;
+    --line: #C9D2DB;
+    --cobalt: #2B59E0;
+    --cobalt-soft: #DCE5FB;
+    --moss: #2F9E6E;
+    --moss-soft: #D3EDE2;
+    --amber: #E3A21A;
+    --amber-soft: #F8E8BF;
+    --coral: #D9503F;
+    --coral-soft: #F8D9D4;
+    --term-bg: #141B2B;
+    --term-head: #1E2740;
+  }
+  * { box-sizing: border-box; }
+  html { color-scheme: light; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font: 16px/1.5 'Bricolage Grotesque', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  }
+  :focus-visible { outline: 3px solid var(--cobalt); outline-offset: 2px; }
+
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 28px 20px 340px; }
+  body[data-term="min"] .wrap { padding-bottom: 90px; }
+  body[data-term="large"] .wrap { padding-bottom: 620px; }
+
+  /* Cabeçalho */
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+  h1 { font-size: clamp(1.5rem, 3vw, 2rem); line-height: 1.1; margin: 0; letter-spacing: -0.02em; font-weight: 700; }
+  .sub { margin: 4px 0 0; color: var(--muted); font-size: .95rem; }
+  .conn { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); font-size: .9rem; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #9AA6B3; }
+  .pill[data-state="on"] .dot { background: var(--moss); }
+  .pill[data-state="demo"] .dot { background: var(--amber); }
+
+  .notice { background: var(--amber-soft); border-radius: 12px; padding: 12px 16px; margin: 0 0 20px; }
+
+  /* Botões */
+  .btn {
+    font: inherit; font-weight: 500; min-height: 44px; padding: 0 18px;
+    border-radius: 12px; border: 1px solid var(--line); background: #fff; color: var(--ink);
+    cursor: pointer; display: inline-flex; align-items: center; gap: 8px;
+    transition: background .15s, border-color .15s, transform .05s;
+  }
+  .btn:hover:not(:disabled) { background: #EEF2F6; border-color: #AEBBC8; }
+  .btn:active:not(:disabled) { transform: translateY(1px); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn.primary { background: var(--cobalt); border-color: var(--cobalt); color: #fff; }
+  .btn.primary:hover:not(:disabled) { background: #2149C2; border-color: #2149C2; }
+  .btn svg { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .linkbtn { font: inherit; background: none; border: 0; padding: 8px 0; color: var(--cobalt); text-decoration: underline; cursor: pointer; }
+
+  /* Painel principal */
+  .hero {
+    position: relative; overflow: hidden;
+    display: grid; grid-template-columns: 168px 1fr; gap: 28px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 22px;
+    padding: 28px 28px 28px 36px;
+  }
+  .hero::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 8px; background: var(--tone, #9AA6B3); transition: background .3s; }
+  .hero[data-phase="ready"] { --tone: var(--cobalt); }
+  .hero[data-phase="wait"]  { --tone: var(--amber); }
+  .hero[data-phase="done"]  { --tone: var(--moss); }
+
+  .badge {
+    width: 168px; height: 168px; border-radius: 20px; background: #D7DFE7; color: var(--muted);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+    transition: background .3s;
+  }
+  .hero[data-phase="ready"] .badge { background: var(--cobalt); color: #fff; }
+  .hero[data-phase="done"] .badge  { background: var(--moss); color: #fff; }
+  .badge-note { font-size: 3.6rem; font-weight: 700; letter-spacing: -.04em; line-height: 1; }
+  .badge-note svg { width: 64px; height: 64px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+  .badge-sub { font-size: .85rem; opacity: .85; margin-top: 6px; }
+
+  .hero-body h2 { font-size: clamp(1.4rem, 2.6vw, 1.9rem); line-height: 1.15; margin: 4px 0 6px; letter-spacing: -.02em; }
+  .hero-body > p { margin: 0; color: var(--muted); max-width: 60ch; }
+  .steps { margin: 14px 0 4px; padding-left: 22px; max-width: 62ch; }
+  .steps li { margin: 4px 0; }
+
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+
+  .feedback {
+    display: flex; gap: 12px; align-items: flex-start;
+    margin-top: 20px; padding: 12px 16px; border-radius: 12px; background: #EAEFF4;
+  }
+  .feedback[data-tone="none"] { color: var(--muted); }
+  .feedback[data-tone="success"] { background: var(--moss-soft); }
+  .feedback[data-tone="warn"]    { background: var(--amber-soft); }
+  .feedback[data-tone="error"]   { background: var(--coral-soft); }
+  .feedback[data-tone="info"]    { background: var(--cobalt-soft); }
+  .fb-icon { width: 22px; height: 22px; flex: none; margin-top: 1px; }
+  .fb-icon:empty { display: none; }
+  .fb-icon svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+  .feedback[data-tone="success"] .fb-icon { color: #1F7650; }
+  .feedback[data-tone="warn"] .fb-icon    { color: #8A5E00; }
+  .feedback[data-tone="error"] .fb-icon   { color: #A8321F; }
+  .feedback[data-tone="info"] .fb-icon    { color: #1D45B8; }
+  .feedback.flash { animation: flash .45s ease-out; }
+  @keyframes flash { from { transform: translateY(4px); opacity: .3; } to { transform: none; opacity: 1; } }
+
+  /* Progresso */
+  .stats { display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-end; margin: 28px 0 10px; }
+  .stat b { display: block; font-size: 1.9rem; line-height: 1; letter-spacing: -.02em; }
+  .stat span { color: var(--muted); font-size: .9rem; }
+  .bar { height: 10px; border-radius: 999px; background: #D5DDE5; overflow: hidden; display: flex; }
+  .bar i { display: block; height: 100%; transition: width .3s; }
+  .bar .m { background: var(--moss); }
+  .bar .s { background: var(--amber); }
+
+  /* Teclado */
+  .piano-wrap { overflow-x: auto; padding: 6px 2px 10px; margin-top: 18px; }
+  .piano { position: relative; min-width: 780px; height: 190px; user-select: none; }
+  .key { position: absolute; top: 0; transition: background .25s, border-color .25s; }
+  .key.white {
+    height: 100%; background: #fff; border: 1px solid #AEBBC8; border-radius: 0 0 8px 8px; z-index: 1;
+    display: flex; align-items: flex-end; justify-content: center; padding-bottom: 6px;
+    font-size: .72rem; color: var(--muted);
+  }
+  .key.black { height: 62%; background: var(--ink); border-radius: 0 0 6px 6px; z-index: 2; }
+  .key.is-mapped.white  { background: var(--moss-soft); border-color: var(--moss); }
+  .key.is-mapped.black  { background: var(--moss); }
+  .key.is-skipped.white { background: repeating-linear-gradient(135deg, var(--amber-soft) 0 6px, #fff 6px 12px); border-color: var(--amber); }
+  .key.is-skipped.black { background: repeating-linear-gradient(135deg, #9A6F0C 0 5px, var(--ink) 5px 10px); }
+  .key.is-current.white { background: var(--cobalt); border-color: var(--cobalt); color: #fff; }
+  .key.is-current.black { background: var(--cobalt); }
+  .key.is-current { animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 4px rgba(43, 89, 224, .28); } }
+
+  .piano-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px 24px; font-size: .88rem; color: var(--muted); }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .sw { width: 14px; height: 14px; border-radius: 4px; border: 1px solid #AEBBC8; background: #fff; }
+  .sw.m { background: var(--moss-soft); border-color: var(--moss); }
+  .sw.s { background: repeating-linear-gradient(135deg, var(--amber-soft) 0 3px, #fff 3px 6px); border-color: var(--amber); }
+  .sw.c { background: var(--cobalt); border-color: var(--cobalt); }
+
+  /* Mapa pronto */
+  .mapbox { margin-top: 26px; padding: 22px; border-radius: 18px; background: var(--panel); border: 1px solid var(--line); border-left: 8px solid var(--moss); }
+  .mapbox[hidden] { display: none; }
+  .mapbox h3 { margin: 0 0 4px; font-size: 1.25rem; letter-spacing: -.01em; }
+  .mapbox p { margin: 0 0 14px; color: var(--muted); }
+  .mapbox textarea {
+    width: 100%; height: 190px; margin-top: 14px; resize: vertical; border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px; background: #fff; color: var(--ink); font: 12.5px/1.5 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  }
+
+  /* Terminal no canto */
+  .term {
+    position: fixed; right: 16px; bottom: 16px; z-index: 20;
+    width: min(400px, calc(100vw - 24px)); height: 300px;
+    display: flex; flex-direction: column;
+    background: var(--term-bg); color: #C9D6EA; border-radius: 14px; overflow: hidden;
+    box-shadow: 0 10px 30px rgba(20, 27, 43, .35);
+  }
+  .term[data-size="large"] { width: min(640px, calc(100vw - 24px)); height: min(70vh, 560px); }
+  .term[data-size="min"] { width: auto; height: auto; }
+  .term[data-size="min"] .term-tools,
+  .term[data-size="min"] .term-log,
+  .term[data-size="min"] .term-send { display: none; }
+  .term-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--term-head); padding: 6px 8px 6px 4px; }
+  .term-title {
+    font: inherit; font-weight: 500; font-size: .92rem; color: #E6EEFB; background: none; border: 0; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px;
+  }
+  .term-title:hover { background: rgba(255, 255, 255, .07); }
+  .term-led { width: 8px; height: 8px; border-radius: 50%; background: #5F6E8C; }
+  .term-head.alert .term-led { background: var(--amber); }
+  .term-count { font-size: .78rem; color: #8FA0BF; }
+  .term-tools { display: flex; gap: 4px; }
+  .tbtn {
+    font: inherit; font-size: .82rem; color: #C9D6EA; background: rgba(255, 255, 255, .07); border: 0;
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  .tbtn:hover:not(:disabled) { background: rgba(255, 255, 255, .15); }
+  .tbtn:disabled { opacity: .4; cursor: not-allowed; }
+  .tbtn.icon { padding: 6px 8px; display: inline-flex; }
+  .tbtn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .term :focus-visible { outline-color: #8FB2FF; }
+  .term-log { flex: 1; overflow: auto; padding: 10px 12px; font: 12.5px/1.5 'JetBrains Mono', ui-monospace, Menlo, monospace; }
+  .ln { white-space: pre-wrap; word-break: break-word; }
+  .ln.ok   { color: #7FD6A8; }
+  .ln.warn { color: #F0C466; }
+  .ln.err  { color: #FF8D7E; }
+  .ln.tx   { color: #8FB2FF; }
+  .ln.sys  { color: #7D8BA6; font-style: italic; }
+  .term-send { display: flex; gap: 6px; padding: 8px; border-top: 1px solid rgba(255, 255, 255, .08); }
+  .term-send input {
+    flex: 1; min-width: 0; font: 12.5px 'JetBrains Mono', ui-monospace, Menlo, monospace; color: #E6EEFB;
+    background: rgba(255, 255, 255, .07); border: 0; border-radius: 8px; padding: 8px 10px;
+  }
+  .term-send input::placeholder { color: #7D8BA6; }
+
+  /* Confirmação */
+  dialog { border: 0; border-radius: 18px; padding: 24px; width: min(420px, 92vw); background: var(--panel); color: var(--ink); box-shadow: 0 20px 50px rgba(20, 27, 43, .35); }
+  dialog::backdrop { background: rgba(20, 27, 43, .45); }
+  dialog h3 { margin: 0 0 6px; font-size: 1.2rem; }
+  dialog p { margin: 0 0 18px; color: var(--muted); }
+  .dlg-actions { display: flex; justify-content: flex-end; gap: 10px; }
+
+  @media (max-width: 700px) {
+    .hero { grid-template-columns: 1fr; padding: 22px 20px 22px 28px; gap: 18px; }
+    .badge { width: 112px; height: 112px; }
+    .badge-note { font-size: 2.6rem; }
+    .badge-note svg { width: 44px; height: 44px; }
+    .actions .btn { flex: 1 1 calc(50% - 10px); justify-content: center; }
+    .term { left: 12px; right: 12px; width: auto; }
+    .term[data-size="large"] { width: auto; }
+    .term[data-size="min"] { left: auto; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body data-term="normal">
+
+<main class="wrap">
+  <header class="top">
+    <div>
+      <h1>Mapeador de teclado</h1>
+      <p class="sub">Descubra quais fios fecham contato em cada tecla do seu teclado.</p>
+    </div>
+    <div class="conn">
+      <span class="pill" id="pill" data-state="off"><span class="dot"></span><span id="pillText">Desconectado</span></span>
+      <button class="btn primary" id="btnConnect">Conectar</button>
+    </div>
+  </header>
+
+  <p class="notice" id="unsupported" hidden>Este navegador não permite conexão serial. Abra esta página no Chrome ou no Edge. Você ainda pode usar o modo de demonstração.</p>
+
+  <section class="hero" id="hero" data-phase="idle" aria-labelledby="heroTitle">
+    <div class="badge" id="badge" aria-hidden="true"></div>
+    <div class="hero-body">
+      <h2 id="heroTitle"></h2>
+      <p id="heroText"></p>
+
+      <ol class="steps" id="steps">
+        <li>Confira se os 16 fios do teclado estão nos pinos 22 a 37 do Mega, ligue-o por USB e clique em Conectar.</li>
+        <li>Aperte uma tecla de cada vez, da mais grave para a mais aguda.</li>
+        <li>Ao terminar, copie o mapa e envie para continuar o projeto.</li>
+      </ol>
+      <button class="linkbtn" id="btnDemo">Testar sem Arduino</button>
+
+      <div class="actions" id="actions">
+        <button class="btn" id="btnUndo" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 010 11H11"/></svg>Desfazer
+        </button>
+        <button class="btn" id="btnSkip" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l9 7-9 7z"/><path d="M19 5v14"/></svg>Pular tecla
+        </button>
+        <button class="btn" id="btnMap" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6v.01M4 12v.01M4 18v.01"/></svg>Mostrar mapa
+        </button>
+        <button class="btn" id="btnReset" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 11-2.3-5.7"/><path d="M20 4v5h-5"/></svg>Recomeçar
+        </button>
+        <button class="btn primary" id="btnSim" hidden>Simular tecla</button>
+      </div>
+
+      <div class="feedback" id="feedback" role="status" aria-live="polite" data-tone="none">
+        <span class="fb-icon" id="fbIcon"></span>
+        <span id="fbText">Os avisos do mapeamento aparecem aqui.</span>
+      </div>
+    </div>
+  </section>
+
+  <section aria-label="Progresso do mapeamento">
+    <div class="stats">
+      <div class="stat"><b id="stMapped">0</b><span>mapeadas</span></div>
+      <div class="stat"><b id="stSkipped">0</b><span>puladas</span></div>
+      <div class="stat"><b id="stLeft">61</b><span>faltam</span></div>
+    </div>
+    <div class="bar" aria-hidden="true"><i class="m" id="barM" style="width:0"></i><i class="s" id="barS" style="width:0"></i></div>
+
+    <div class="piano-wrap">
+      <div class="piano" id="piano" role="img" aria-label="Teclado de 61 teclas mostrando o progresso do mapeamento"></div>
+    </div>
+    <div class="piano-foot">
+      <div class="legend">
+        <span><i class="sw m"></i>Mapeada</span>
+        <span><i class="sw s"></i>Pulada</span>
+        <span><i class="sw c"></i>Tecla atual</span>
+        <span><i class="sw"></i>Pendente</span>
+      </div>
+      <div id="keyInfo">Passe o mouse sobre uma tecla para ver os detalhes.</div>
+    </div>
+  </section>
+
+  <section class="mapbox" id="mapbox" hidden aria-labelledby="mapTitle">
+    <h3 id="mapTitle">Mapa pronto</h3>
+    <p id="mapSummary">Cole este texto na conversa para continuar o projeto do MIDI.</p>
+    <div class="actions" style="margin-top:0">
+      <button class="btn primary" id="btnCopyMap">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 012-2h9"/></svg>Copiar mapa
+      </button>
+      <button class="btn" id="btnDownloadMap">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10M8 10l4 4 4-4M5 19h14"/></svg>Baixar .txt
+      </button>
+    </div>
+    <textarea id="mapText" readonly aria-label="Texto do mapa"></textarea>
+  </section>
+</main>
+
+<aside class="term" id="term" data-size="normal" aria-label="Mensagens do terminal">
+  <div class="term-head" id="termHead">
+    <button class="term-title" id="termToggle" aria-expanded="true"><span class="term-led"></span>Terminal <span class="term-count" id="termCount">0</span></button>
+    <div class="term-tools">
+      <button class="tbtn" id="termCopy">Copiar</button>
+      <button class="tbtn" id="termClear">Limpar</button>
+      <button class="tbtn icon" id="termSize" aria-label="Ampliar terminal" title="Ampliar">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg>
+      </button>
+      <button class="tbtn icon" id="termMin" aria-label="Minimizar terminal" title="Minimizar">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="term-log" id="termLog" tabindex="0" role="log" aria-label="Mensagens trocadas com o Arduino"></div>
+  <form class="term-send" id="termForm" autocomplete="off">
+    <input id="termInput" placeholder="Enviar comando: u, s, p ou r" aria-label="Comando para enviar ao Arduino" disabled>
+    <button class="tbtn" id="termSend" disabled>Enviar</button>
+  </form>
+</aside>
+
+<dialog id="dlg" aria-labelledby="dlgTitle">
+  <h3 id="dlgTitle">Recomeçar do zero?</h3>
+  <p>As teclas já mapeadas serão apagadas e você volta para a primeira tecla.</p>
+  <div class="dlg-actions">
+    <button class="btn" id="dlgCancel">Cancelar</button>
+    <button class="btn primary" id="dlgOk">Recomeçar</button>
+  </div>
+</dialog>
+
+<script>
+(() => {
+  'use strict';
+
+  /* ---------- Configuração (igual ao sketch do Arduino) ---------- */
+  const TOTAL = 61;
+  const FIRST_NOTE = 36;      // C2 = 36
+  const BAUD = 115200;
+  const NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  const noteName = n => NAMES[n % 12] + (Math.floor(n / 12) - 1);
+  const $ = id => document.getElementById(id);
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  /* ---------- Estado ---------- */
+  const keys = Array.from({ length: TOTAL }, () => ({ state: 'pending', a: null, b: null }));
+  let current = 0;            // índice da próxima tecla (0..61)
+  let link = 'off';           // 'off' | 'serial' | 'demo'
+  let booted = false;         // o Arduino já respondeu
+  let bootSlow = false;
+  let bootTimer = null;
+  let mapText = '';
+  let capturingMap = false, mapLines = [];
+  let restPins = null;
+  let busy = false;
+
+  function resetKeys() {
+    keys.forEach(k => { k.state = 'pending'; k.a = null; k.b = null; });
+    current = 0;
+  }
+  const invalidateMap = () => { mapText = ''; };
+
+  /* ---------- Ícones do feedback ---------- */
+  const ICONS = {
+    success: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.5"/></svg>',
+    warn: '<svg viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17.2v.01"/></svg>',
+    error: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg>',
+    info: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8v.01"/></svg>',
+    none: ''
+  };
+  const CHECK_BIG = '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+
+  function feedback(tone, msg) {
+    const fb = $('feedback');
+    fb.dataset.tone = tone;
+    $('fbIcon').innerHTML = ICONS[tone] || '';
+    $('fbText').textContent = msg;
+    fb.classList.remove('flash');
+    void fb.offsetWidth;
+    fb.classList.add('flash');
+  }
+
+  /* ---------- Teclado visual ---------- */
+  const piano = $('piano');
+  const keyEls = [];
+  (function buildPiano() {
+    const whites = 36, unit = 100 / whites;
+    let w = 0;
+    for (let i = 0; i < TOTAL; i++) {
+      const n = FIRST_NOTE + i, pc = n % 12;
+      const black = [1, 3, 6, 8, 10].includes(pc);
+      const el = document.createElement('div');
+      el.className = 'key ' + (black ? 'black' : 'white');
+      el.dataset.i = i;
+      if (black) {
+        const bw = unit * 0.6;
+        el.style.width = bw + '%';
+        el.style.left = (w * unit - bw / 2) + '%';
+      } else {
+        el.style.width = unit + '%';
+        el.style.left = (w * unit) + '%';
+        if (pc === 0) el.textContent = noteName(n);
+        w++;
+      }
+      piano.appendChild(el);
+      keyEls.push(el);
+    }
+  })();
+
+  function keyDescription(i) {
+    const k = keys[i], n = FIRST_NOTE + i;
+    let s = `Tecla ${i + 1}, nota ${noteName(n)} (MIDI ${n})`;
+    if (k.state === 'mapped') s += k.a != null ? `, pinos ${k.a} e ${k.b}` : ', mapeada';
+    else if (k.state === 'skipped') s += ', pulada';
+    else s += ', ainda não mapeada';
+    return s;
+  }
+  const DEFAULT_INFO = 'Passe o mouse sobre uma tecla para ver os detalhes.';
+  piano.addEventListener('pointerover', e => {
+    const el = e.target.closest('.key');
+    if (el) $('keyInfo').textContent = keyDescription(+el.dataset.i);
+  });
+  piano.addEventListener('click', e => {
+    const el = e.target.closest('.key');
+    if (el) $('keyInfo').textContent = keyDescription(+el.dataset.i);
+  });
+  piano.addEventListener('pointerleave', () => { $('keyInfo').textContent = DEFAULT_INFO; });
+
+  /* ---------- Desenho da tela ---------- */
+  function render() {
+    let mapped = 0, skipped = 0;
+    keys.forEach((k, i) => {
+      if (k.state === 'mapped') mapped++;
+      else if (k.state === 'skipped') skipped++;
+      const el = keyEls[i];
+      el.classList.toggle('is-mapped', k.state === 'mapped');
+      el.classList.toggle('is-skipped', k.state === 'skipped');
+      el.classList.toggle('is-current', link !== 'off' && booted && i === current && current < TOTAL);
+      el.title = keyDescription(i);
+    });
+    $('stMapped').textContent = mapped;
+    $('stSkipped').textContent = skipped;
+    $('stLeft').textContent = TOTAL - mapped - skipped;
+    $('barM').style.width = (mapped / TOTAL * 100) + '%';
+    $('barS').style.width = (skipped / TOTAL * 100) + '%';
+
+    // Instrução principal
+    let phase, title, text;
+    if (link === 'off') {
+      phase = 'idle';
+      title = 'Conecte o Arduino para começar';
+      text = 'Na janela do navegador, escolha a porta do Arduino. No Mac ela costuma aparecer como usbmodem.';
+    } else if (!booted) {
+      phase = 'wait';
+      title = bootSlow ? 'O Arduino ainda não respondeu' : 'Aguardando o Arduino';
+      text = bootSlow ? 'Sem resposta da placa até agora.' : 'A placa está reiniciando. Isso leva alguns segundos.';
+    } else if (current >= TOTAL) {
+      phase = 'done';
+      title = 'Todas as teclas foram percorridas';
+      text = mapText
+        ? 'O mapa está pronto logo abaixo. Copie e envie para seguir com o código MIDI.'
+        : 'Clique em Mostrar mapa para gerar o resultado.';
+    } else {
+      phase = 'ready';
+      title = `Pressione a tecla ${current + 1} de ${TOTAL}`;
+      text = current === 0
+        ? 'Comece pela tecla mais grave, a primeira da esquerda. Aperte só uma e solte.'
+        : current === TOTAL - 1
+          ? 'Esta é a última tecla, a mais aguda, na ponta direita. Aperte só ela e solte.'
+          : 'Aperte só uma tecla, a próxima à direita da anterior, e solte.';
+    }
+    $('hero').dataset.phase = phase;
+    $('heroTitle').textContent = title;
+    $('heroText').textContent = text;
+    $('steps').hidden = phase !== 'idle';
+    $('btnDemo').hidden = phase !== 'idle';
+
+    const badge = $('badge');
+    if (phase === 'ready') {
+      const n = FIRST_NOTE + current;
+      badge.innerHTML = `<span class="badge-note">${noteName(n)}</span><span class="badge-sub">nota MIDI ${n}</span>`;
+    } else if (phase === 'done') {
+      badge.innerHTML = `<span class="badge-note">${CHECK_BIG}</span>`;
+    } else {
+      badge.innerHTML = '<span class="badge-note">–</span>';
+    }
+
+    // Botões
+    const on = link !== 'off' && booted;
+    $('btnUndo').disabled = !(on && current > 0);
+    $('btnSkip').disabled = !(on && current < TOTAL);
+    $('btnMap').disabled = !on;
+    $('btnReset').disabled = !on;
+    $('btnSim').hidden = link !== 'demo';
+    $('btnSim').disabled = !(on && current < TOTAL);
+    $('termInput').disabled = link === 'off';
+    $('termSend').disabled = link === 'off';
+
+    // Conexão
+    const pill = $('pill'), btn = $('btnConnect');
+    if (link === 'serial') {
+      pill.dataset.state = 'on'; $('pillText').textContent = `Conectado a ${BAUD} baud`;
+      btn.textContent = 'Desconectar'; btn.classList.remove('primary');
+    } else if (link === 'demo') {
+      pill.dataset.state = 'demo'; $('pillText').textContent = 'Modo demonstração';
+      btn.textContent = 'Sair da demonstração'; btn.classList.remove('primary');
+    } else {
+      pill.dataset.state = 'off'; $('pillText').textContent = 'Desconectado';
+      btn.textContent = 'Conectar'; btn.classList.add('primary');
+    }
+    btn.disabled = busy || (link === 'off' && !('serial' in navigator));
+
+    // Mapa pronto
+    const box = $('mapbox');
+    if (mapText) {
+      if ($('mapText').value !== mapText) $('mapText').value = mapText;
+      const m = mapText.match(/TECLAS_MAPEADAS=(\d+)/);
+      $('mapSummary').textContent = `${m ? m[1] : mapped} de ${TOTAL} teclas mapeadas. Cole este texto na conversa para continuar o projeto do MIDI.`;
+    }
+    box.hidden = !mapText;
+  }
+
+  /* ---------- Terminal ---------- */
+  const logEl = $('termLog');
+  let termSize = window.innerWidth >= 900 ? 'normal' : 'min';
+
+  function log(text, cls = '') {
+    const atBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 40;
+    const d = document.createElement('div');
+    d.className = 'ln ' + cls;
+    d.textContent = text;
+    logEl.appendChild(d);
+    while (logEl.childElementCount > 5000) logEl.removeChild(logEl.firstChild);
+    $('termCount').textContent = logEl.childElementCount;
+    if (atBottom) logEl.scrollTop = logEl.scrollHeight;
+    if (termSize === 'min' && (cls === 'warn' || cls === 'err')) $('termHead').classList.add('alert');
+  }
+
+  function setTermSize(s) {
+    termSize = s;
+    $('term').dataset.size = s;
+    document.body.dataset.term = s;
+    $('termToggle').setAttribute('aria-expanded', String(s !== 'min'));
+    $('termSize').title = $('termSize').ariaLabel = s === 'large' ? 'Reduzir terminal' : 'Ampliar terminal';
+    if (s !== 'min') {
+      $('termHead').classList.remove('alert');
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+  }
+  $('termToggle').onclick = () => setTermSize(termSize === 'min' ? 'normal' : 'min');
+  $('termMin').onclick = () => setTermSize('min');
+  $('termSize').onclick = () => setTermSize(termSize === 'large' ? 'normal' : 'large');
+  $('termClear').onclick = () => { logEl.textContent = ''; $('termCount').textContent = '0'; };
+  $('termCopy').onclick = async () => {
+    const text = [...logEl.children].map(c => c.textContent).join('\n');
+    const ok = await copyText(text);
+    const b = $('termCopy'), old = b.textContent;
+    b.textContent = ok ? 'Copiado' : 'Falhou';
+    setTimeout(() => { b.textContent = old; }, 1500);
+  };
+  $('termForm').onsubmit = e => {
+    e.preventDefault();
+    const v = $('termInput').value.trim();
+    if (v && link !== 'off') sendCommand(v);
+    $('termInput').value = '';
+  };
+
+  async function copyText(t) {
+    try { await navigator.clipboard.writeText(t); return true; }
+    catch {
+      const ta = document.createElement('textarea');
+      ta.value = t; ta.style.cssText = 'position:fixed;opacity:0';
+      document.body.appendChild(ta); ta.select();
+      let ok = false;
+      try { ok = document.execCommand('copy'); } catch {}
+      ta.remove();
+      return ok;
+    }
+  }
+
+  /* ---------- Interpretação das mensagens do Arduino ---------- */
+  function classify(line) {
+    if (/^OK tecla/.test(line)) return 'ok';
+    if (/^(ATENCAO|Mais de um|Essa tecla ja)/.test(line)) return 'warn';
+    return '';
+  }
+
+  function handleLine(raw) {
+    const line = raw.replace(/\r/g, '');
+    if (!line.trim()) return;
+
+    let cls = classify(line);
+    if (restPins && /^\s*pino /.test(line)) cls = 'warn';
+    log(line, cls);
+
+    if (!booted) { booted = true; bootSlow = false; clearTimeout(bootTimer); }
+
+    // Bloco do mapa
+    if (capturingMap) {
+      if (line.includes('=== FIM DO MAPA ===')) {
+        capturingMap = false;
+        mapLines.push(line);
+        mapText = mapLines.join('\n');
+        const m = mapText.match(/TECLAS_MAPEADAS=(\d+)/);
+        feedback('success', `Mapa gerado com ${m ? m[1] : '?'} de ${TOTAL} teclas. Copie e envie.`);
+        render();
+        return;
+      }
+      mapLines.push(line);
+      const m = line.match(/^(\d+),(\d+),(\d+),(\d+),(A>B|B>A|A=B)$/);
+      if (m) {
+        const i = +m[1] - 1;
+        if (i >= 0 && i < TOTAL) { keys[i].state = 'mapped'; keys[i].a = +m[3]; keys[i].b = +m[4]; }
+      }
+      return;
+    }
+    if (line.includes('=== INICIO DO MAPA ===')) {
+      capturingMap = true; mapLines = [line];
+      return;
+    }
+
+    let m;
+    if (line.includes('=== Mapeador de matriz')) {
+      resetKeys(); invalidateMap();
+      feedback('info', 'Arduino pronto. Aperte a primeira tecla quando quiser.');
+    } else if ((m = line.match(/^Pressione a tecla (\d+) de (\d+)/))) {
+      current = +m[1] - 1;
+    } else if ((m = line.match(/^OK tecla (\d+): pino (\d+) <-> pino (\d+)/))) {
+      const n = +m[1];
+      Object.assign(keys[n - 1], { state: 'mapped', a: +m[2], b: +m[3] });
+      current = n; invalidateMap();
+      feedback('success', `Tecla ${n} registrada: contato entre os pinos ${m[2]} e ${m[3]}. Solte a tecla.`);
+    } else if ((m = line.match(/^Tecla (\d+) pulada/))) {
+      const n = +m[1];
+      Object.assign(keys[n - 1], { state: 'skipped', a: null, b: null });
+      current = n; invalidateMap();
+      feedback('info', `Tecla ${n} pulada. Ela ficará sem mapa.`);
+    } else if ((m = line.match(/^Desfeito\. Refaca a tecla (\d+)/))) {
+      const n = +m[1];
+      Object.assign(keys[n - 1], { state: 'pending', a: null, b: null });
+      current = n - 1; invalidateMap();
+      feedback('info', `Tecla ${n} desfeita. Aperte-a de novo.`);
+    } else if (/^Recomecando do zero/.test(line)) {
+      resetKeys(); invalidateMap();
+      feedback('info', 'Recomeçando do zero.');
+    } else if (/^Mais de um contato/.test(line)) {
+      feedback('warn', 'Mais de uma tecla ao mesmo tempo. Solte tudo e aperte só uma.');
+    } else if ((m = line.match(/^Essa tecla ja foi mapeada como tecla (\d+)/))) {
+      feedback('warn', `Essa tecla já foi registrada como a tecla ${m[1]}. Solte e aperte a próxima da sequência.`);
+    } else if (/^ATENCAO: contatos fechados/.test(line)) {
+      restPins = [];
+    } else if (restPins && (m = line.match(/^\s*pino (\d+) <-> pino (\d+)/))) {
+      restPins.push(`${m[1]} e ${m[2]}`);
+    } else if (restPins && /^Solte tudo/.test(line)) {
+      feedback('warn', `Há contatos fechados com o teclado em repouso (pinos ${restPins.join('; ')}). Confira se há fio trocado, curto ou tecla presa.`);
+      restPins = null;
+    }
+    render();
+  }
+
+  /* ---------- Conexão serial ---------- */
+  let port = null, writer = null, reader = null, pipeDone = null, closing = false;
+  const encoder = new TextEncoder();
+
+  function startBootTimer() {
+    clearTimeout(bootTimer);
+    bootSlow = false;
+    bootTimer = setTimeout(() => {
+      if (!booted && link === 'serial') {
+        bootSlow = true;
+        feedback('warn', 'O Arduino ainda não respondeu. Confira se o sketch do mapeador está carregado na placa e se a velocidade é 115200.');
+        render();
+      }
+    }, 5000);
+  }
+
+  async function connectSerial() {
+    try {
+      port = await navigator.serial.requestPort();
+    } catch (e) {
+      port = null;
+      if (e.name === 'NotFoundError') feedback('info', 'Nenhuma porta escolhida. Clique em Conectar para tentar de novo.');
+      else { log('[erro] ' + e.message, 'err'); feedback('error', 'Não foi possível abrir a lista de portas: ' + e.message); }
+      return;
+    }
+    try {
+      await port.open({ baudRate: BAUD });
+    } catch (e) {
+      port = null;
+      log('[erro] ' + e.message, 'err');
+      feedback('error', 'Não foi possível abrir a porta. Feche o Monitor Serial da Arduino IDE e qualquer outro programa que use o Arduino, e tente de novo.');
+      return;
+    }
+    link = 'serial'; booted = false;
+    resetKeys(); invalidateMap();
+    log(`[conectado] ${BAUD} baud`, 'sys');
+    feedback('info', 'Conectado. Reiniciando a placa…');
+    writer = port.writable.getWriter();
+    readLoop();
+    try {   // força o reset da placa para o estado da tela e do Arduino começarem iguais
+      await port.setSignals({ dataTerminalReady: false, requestToSend: false });
+      await sleep(120);
+      await port.setSignals({ dataTerminalReady: true, requestToSend: true });
+    } catch {}
+    startBootTimer();
+  }
+
+  async function readLoop() {
+    const p = port;
+    const decoder = new TextDecoderStream();
+    pipeDone = p.readable.pipeTo(decoder.writable).catch(() => {});
+    reader = decoder.readable.getReader();
+    let buf = '';
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += value;
+        let i;
+        while ((i = buf.indexOf('\n')) >= 0) {
+          handleLine(buf.slice(0, i));
+          buf = buf.slice(i + 1);
+        }
+      }
+    } catch (e) {
+      if (!closing) connectionLost(e);
+    } finally {
+      try { reader.releaseLock(); } catch {}
+    }
+  }
+
+  async function teardown() {
+    closing = true;
+    clearTimeout(bootTimer);
+    try { await reader?.cancel(); } catch {}
+    try { await pipeDone; } catch {}
+    try { writer?.releaseLock(); } catch {}
+    try { await port?.close(); } catch {}
+    port = null; writer = null; reader = null; pipeDone = null;
+    link = 'off'; booted = false; bootSlow = false;
+    capturingMap = false; restPins = null;
+    closing = false;
+  }
+
+  async function connectionLost(e) {
+    if (closing || link !== 'serial') return;
+    log('[desconectado] ' + (e && e.message ? e.message : 'conexão perdida'), 'err');
+    await teardown();
+    feedback('error', 'O Arduino foi desconectado. Confira o cabo USB e clique em Conectar.');
+    render();
+  }
+
+  async function disconnectSerial() {
+    await teardown();
+    log('[desconectado]', 'sys');
+    feedback('info', 'Desconectado.');
+  }
+
+  if ('serial' in navigator) {
+    navigator.serial.addEventListener('disconnect', e => { if (e.target === port) connectionLost(); });
+  } else {
+    $('unsupported').hidden = false;
+  }
+
+  async function sendCommand(str) {
+    log('› ' + str, 'tx');
+    if (link === 'demo') { demoSend(str); return; }
+    if (!writer) return;
+    try {
+      await writer.write(encoder.encode(str.length === 1 ? str : str + '\n'));
+    } catch (e) {
+      log('[erro ao enviar] ' + e.message, 'err');
+      feedback('error', 'Não foi possível enviar o comando: ' + e.message);
+    }
+  }
+
+  /* ---------- Modo demonstração (simula o Arduino) ---------- */
+  const demo = { cur: 0, map: Array(TOTAL).fill(null), timers: [] };
+
+  function feed(lines, delay = 0, gap = 80) {
+    lines.forEach((l, i) => demo.timers.push(setTimeout(() => { if (link === 'demo') handleLine(l); }, delay + i * gap)));
+  }
+  const demoPrompt = () => `Pressione a tecla ${demo.cur + 1} de ${TOTAL} (nota MIDI ${FIRST_NOTE + demo.cur})`;
+
+  function demoMapLines() {
+    const c = demo.map.filter(Boolean).length;
+    const L = [
+      '', '=== INICIO DO MAPA ===',
+      `TECLAS_MAPEADAS=${c}`, `TOTAL=${TOTAL}`, `PRIMEIRA_NOTA=${FIRST_NOTE}`,
+      `PARES_COM_DIODO(sentido unico)=${c}`, 'PARES_SEM_DIODO(dois sentidos)=0',
+      '# tecla,nota,pinoA,pinoB,sentido  (pinos = 1..16 do conector)',
+      '# sentido: A>B = so conduz com A como saida e B como entrada',
+      '#          B>A = o inverso;  A=B = conduz nos dois sentidos'
+    ];
+    for (let k = 0; k < TOTAL; k++) {
+      const e = demo.map[k];
+      L.push(e ? `${k + 1},${FIRST_NOTE + k},${e.a},${e.b},A>B` : `${k + 1},${FIRST_NOTE + k},SEM_MAPA`);
+    }
+    L.push('=== FIM DO MAPA ===', 'Copie tudo entre INICIO e FIM e me envie.');
+    return L;
+  }
+
+  function demoSend(str) {
+    for (const c of str) {
+      if (c === 'p') feed(demoMapLines(), 150, 6);
+      else if (c === 'r') { demo.map.fill(null); demo.cur = 0; feed(['Recomecando do zero.', demoPrompt()], 150); }
+      else if (c === 's' && demo.cur < TOTAL) {
+        demo.map[demo.cur] = null;
+        const n = demo.cur + 1;
+        demo.cur++;
+        feed([`Tecla ${n} pulada.`], 150);
+        if (demo.cur < TOTAL) feed([demoPrompt()], 300);
+      } else if (c === 'u' && demo.cur > 0) {
+        demo.cur--;
+        demo.map[demo.cur] = null;
+        feed([`Desfeito. Refaca a tecla ${demo.cur + 1}`, demoPrompt()], 150);
+      }
+    }
+  }
+
+  function demoPress() {
+    if (demo.cur >= TOTAL) return;
+    const k = demo.cur, a = (k % 8) + 1, b = 8 + Math.floor(k / 8) + 1;
+    demo.map[k] = { a, b };
+    demo.cur++;
+    feed([`OK tecla ${k + 1}: pino ${a} <-> pino ${b}`], 0);
+    if (demo.cur >= TOTAL) feed(demoMapLines(), 700, 6);
+    else feed([demoPrompt()], 700);
+  }
+
+  function startDemo() {
+    link = 'demo'; booted = false;
+    resetKeys(); invalidateMap();
+    demo.cur = 0; demo.map.fill(null);
+    log('[demonstração] as mensagens a seguir são simuladas', 'sys');
+    feedback('info', 'Modo demonstração: use o botão Simular tecla no lugar de apertar o teclado.');
+    feed(['=== Mapeador de matriz - Mega ===', 'Comandos: u=desfazer  s=pular  p=imprimir  r=recomecar', demoPrompt()], 400, 150);
+    render();
+  }
+
+  function stopDemo() {
+    demo.timers.forEach(clearTimeout); demo.timers = [];
+    link = 'off'; booted = false;
+    capturingMap = false; restPins = null;
+    resetKeys(); invalidateMap();
+    log('[demonstração] encerrada', 'sys');
+    feedback('info', 'Modo demonstração encerrado.');
+    render();
+  }
+
+  /* ---------- Botões ---------- */
+  $('btnConnect').onclick = async () => {
+    busy = true; render();
+    try {
+      if (link === 'serial') await disconnectSerial();
+      else if (link === 'demo') stopDemo();
+      else await connectSerial();
+    } finally { busy = false; render(); }
+  };
+  $('btnDemo').onclick = startDemo;
+  $('btnSim').onclick = demoPress;
+  $('btnUndo').onclick = () => sendCommand('u');
+  $('btnSkip').onclick = () => sendCommand('s');
+  $('btnMap').onclick = () => sendCommand('p');
+  $('btnReset').onclick = () => {
+    const any = keys.some(k => k.state !== 'pending');
+    if (any) $('dlg').showModal(); else sendCommand('r');
+  };
+  $('dlgCancel').onclick = () => $('dlg').close();
+  $('dlgOk').onclick = () => { $('dlg').close(); sendCommand('r'); };
+
+  $('btnCopyMap').onclick = async () => {
+    const ok = await copyText(mapText);
+    feedback(ok ? 'success' : 'error', ok
+      ? 'Mapa copiado. Cole na conversa para continuar.'
+      : 'Não foi possível copiar. Selecione o texto na caixa e copie com Cmd+C.');
+  };
+  $('btnDownloadMap').onclick = () => {
+    const url = URL.createObjectURL(new Blob([mapText], { type: 'text/plain' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = 'mapa-teclado.txt';
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    feedback('success', 'Arquivo mapa-teclado.txt baixado.');
+  };
+
+  /* ---------- Início ---------- */
+  setTermSize(termSize);
+  log('Terminal pronto. As mensagens do Arduino aparecem aqui.', 'sys');
+  render();
+})();
+</script>
+</body>
+</html>
